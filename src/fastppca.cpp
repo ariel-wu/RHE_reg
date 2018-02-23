@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string>
 #include <stdlib.h>
+#include <vector> 
 //#include <random>
 
 #include <bits/stdc++.h>
@@ -48,7 +49,8 @@ double **y_m;
 struct timespec t0;
 
 clock_t total_begin = clock();
-MatrixXdr pheno; 
+MatrixXdr pheno;
+MatrixXdr covariate;  
 genotype g;
 MatrixXdr geno_matrix; //(p,n)
 
@@ -76,7 +78,128 @@ bool memory_efficient = false;
 bool missing=false;
 bool fast_mode = true;
 bool text_version = false;
+bool use_cov=false; 
 
+
+std::istream& newline(std::istream& in)
+{
+    if ((in >> std::ws).peek() != std::char_traits<char>::to_int_type('\n')) {
+        in.setstate(std::ios_base::failbit);
+    }
+    return in.ignore();
+}
+void read_cov(int Nind, std::string filename, std::string covname){
+	ifstream ifs(filename.c_str(), ios::in); 
+	std::string line; 
+	std::istringstream in; 
+	int covIndex = 0; 
+	std::getline(ifs,line); 
+	in.str(line); 
+	string b;
+	vector<vector<int> > missing; 
+	int covNum=0;  
+	while(in>>b)
+	{
+		missing.push_back(vector<int>()); //push an empty row  
+		if(b==covname && covname!="")
+			covIndex=covNum; 
+		covNum++; 
+	}
+	vector<double> cov_sum(covNum, 0); 
+	if(covname=="")
+	{
+		covariate.resize(Nind, covNum); 
+		cout<< "Read in "<<covNum << " Covariates.. "<<endl;
+	}
+	else 
+	{
+		covariate.resize(Nind, 1); 
+		cout<< "Read in covariate "<<covname<<endl;  
+	}
+
+	
+	int j=0; 
+	while(std::getline(ifs, line)){
+		in.clear(); 
+		in.str(line);
+		string temp; 
+		for(int k=0; k<covNum; k++){
+			in>>temp;
+			if(temp=="NA")
+			{
+				missing[k].push_back(j);
+				continue;  
+			} 
+			int cur = atof(temp.c_str()); 
+			if(cur==-9)
+			{
+				missing[k].push_back(j); 
+				continue; 
+			}
+			if(covname=="")
+			{
+				cov_sum[k]= cov_sum[k]+ cur; 
+				covariate(j,k) = cur; 
+			}
+			else
+				if(k==covIndex)
+				{
+					covariate(j, 0) = cur;
+					cov_sum[k] = cov_sum[k]+cur; 
+				}
+		} 
+		j++;
+	}
+	//compute cov mean and impute 
+	for (int a=0; a<covNum ; a++)
+	{
+		int missing_num = missing[a].size(); 
+		cov_sum[a] = cov_sum[a] / (covNum - missing_num);
+
+		for(int b=0; b<missing_num; b++)
+		{
+                        int index = missing[a][b];
+                        if(covname=="")
+                                covariate(index, a) = cov_sum[a];
+                        else if (a==covIndex)
+                                covariate(index, 0) = cov_sum[a];
+                } 
+	}
+}
+void read_pheno2(int Nind, std::string filename){
+//	pheno.resize(Nind,1); 
+	ifstream ifs(filename.c_str(), ios::in); 
+	
+	std::string line;
+	std::istringstream in;  
+	int phenocount=0; 
+//read header
+	std::getline(ifs,line); 
+	in.str(line); 
+	string b; 
+	while(in>>b)
+	{
+		if(b!="FID" && b !="IID")
+			phenocount++; 
+	} 
+	pheno.resize(Nind, phenocount);
+	int i=0;  
+	while(std::getline(ifs, line)){
+		in.clear(); 
+		in.str(line); 
+		double temp;
+		//fid,iid
+		//todo: fid iid mapping; 
+		//todo: handle missing phenotype
+		in>>temp; in>>temp; 
+		for(int j=0; j<phenocount;j++) {
+			in>>temp; 
+			pheno(i,j)=temp; 
+		}
+		i++;
+	}
+	//cout<<pheno; 
+}
 void read_pheno(int Nind, std::string filename){
 	pheno.resize(Nind, 1); 
 	ifstream ifs(filename.c_str(), ios::in); 
@@ -85,6 +208,8 @@ void read_pheno(int Nind, std::string filename){
 	int i=0;  
 	while(std::getline(ifs, line)){
 		pheno(i,0) = atof(line.c_str());
+		if(pheno(i,0)==-1)
+			cout<<"WARNING: missing phenotype"<<endl; 
 		i++;  
 	}
 
@@ -527,6 +652,7 @@ int main(int argc, char const *argv[]){
 		exit(-1);
 	}
 
+    //MAX_ITER =  command_line_opts.max_iterations ; 
 	int B = command_line_opts.batchNum; 
 	k_orig = command_line_opts.num_of_evec ;
 	debug = command_line_opts.debugmode ;
@@ -538,9 +664,7 @@ int main(int argc, char const *argv[]){
 	command_line_opts.l = k - k_orig;
 	p = g.Nsnp;
 	n = g.Nindv;
-	convergence_limit = command_line_opts.convergence_limit;
 	bool toStop=false;
-	if(convergence_limit!=-1)
 		toStop=true;
 	srand((unsigned int) time(0));
 	c.resize(p,k);
@@ -619,7 +743,20 @@ int main(int argc, char const *argv[]){
 	//
 	//
 	std::string filename=command_line_opts.PHENOTYPE_FILE_PATH; 
-	read_pheno(g.Nindv, filename); 
+	read_pheno2(g.Nindv, filename);
+	if(filename=="")
+	{	
+		cout<<"No Phenotype File Specified"<<endl;
+		return 0 ; 
+	}
+	std::string covfile=command_line_opts.COVARIATE_FILE_PATH;
+        std::string covname=command_line_opts.COVARIATE_NAME;  
+	if(covfile!=""){
+		use_cov=true; 
+		read_cov(g.Nindv, covfile, covname); 
+	} 
+	else if(covfile=="")
+		cout<<"No Covariate File Specified"<<endl; 
 	double y_sum=pheno.sum(); 
 	double y_mean = y_sum/g.Nindv;
 	for(int i=0; i<g.Nindv; i++) 
@@ -630,7 +767,8 @@ int main(int argc, char const *argv[]){
 	//MatrixXdr res(1,g.Nindv); 
 	//multiply_y_post_fast(zb, 1, res, false); 
 	//cout<< MatrixXdr::Constant(1,4,1)<<endl;  
-	
+	MatrixXdr V(g.Nindv, g.Nindv); 
+	//V =  
 	//compute y^TKy
 	MatrixXdr res(g.Nsnp, 1); 
 	multiply_y_pre_fast(pheno,1,res,false); 
