@@ -14,6 +14,8 @@ struct options{
 
 	std::string GENOTYPE_FILE_PATH;
 	std::string PHENOTYPE_FILE_PATH; 
+	std::string COVARIATE_FILE_PATH; 
+	std::string COVARIATE_NAME; 
 	std::string OUTPUT_PATH;
 	int batchNum; 
 	int num_of_evec ;
@@ -21,7 +23,6 @@ struct options{
 	bool debugmode;
 	int accelerated_em;
 	int l;
-	double convergence_limit;
 	bool memory_efficient;
 	bool fast_mode;
 	bool missing;
@@ -196,7 +197,6 @@ void parse_args(int argc, char const *argv[]){
 	bool got_genotype_file=false;
 	command_line_opts.l=2;
 	command_line_opts.accelerated_em=0;
-	command_line_opts.convergence_limit= -1.0;
 	command_line_opts.memory_efficient=false;
 	command_line_opts.fast_mode=true;
 	command_line_opts.missing=false;
@@ -221,7 +221,8 @@ void parse_args(int argc, char const *argv[]){
 		command_line_opts.OUTPUT_PATH = cfg.getValueOfKey<string>("output_path",string(""));
 		command_line_opts.GENOTYPE_FILE_PATH = cfg.getValueOfKey<string>("genotype",string(""));
 		command_line_opts.PHENOTYPE_FILE_PATH= cfg.getValueOfKey<string>("phenotype", string("")); 
-		command_line_opts.convergence_limit =cfg.getValueOfKey<double>("convergence_limit",-1.0);
+		command_line_opts.COVARIATE_FILE_PATH= cfg.getValueOfKey<string>("covariate", string(""));
+		command_line_opts.COVARIATE_NAME=cfg.getValueOfKey<string>("covariateName", string(""));  
 		command_line_opts.accelerated_em = cfg.getValueOfKey<int>("accelerated_em",0);
 		command_line_opts.memory_efficient = cfg.getValueOfKey<bool>("memory_efficient",false);	
 		command_line_opts.fast_mode = cfg.getValueOfKey<bool>("fast_mode",true);
@@ -240,6 +241,14 @@ void parse_args(int argc, char const *argv[]){
 				command_line_opts.PHENOTYPE_FILE_PATH =string(argv[i+1]); 
 				i++; 
 			}
+			else if(strcmp(argv[i],"-c")==0){
+				command_line_opts.COVARIATE_FILE_PATH = string(argv[i+1]);
+				i++; 
+			}
+			else if(strcmp(argv[i],"-cn")==0){
+                                command_line_opts.COVARIATE_NAME = string(argv[i+1]);
+                                i++;
+                        }
 			else if(strcmp(argv[i],"-o")==0){
 				command_line_opts.OUTPUT_PATH = string(argv[i+1]);
 				i++;
@@ -254,10 +263,6 @@ void parse_args(int argc, char const *argv[]){
 			}
 			else if(strcmp(argv[i],"-l")==0){
 				command_line_opts.l = atoi(argv[i+1]);
-				i++;
-			}
-			else if(strcmp(argv[i],"-cl")==0){
-				command_line_opts.convergence_limit = atof(argv[i+1]);
 				i++;
 			}
 			else if(strcmp(argv[i],"-aem")==0){
@@ -287,6 +292,8 @@ void parse_args(int argc, char const *argv[]){
 			command_line_opts.debugmode=true;
 		else if(strcmp(argv[i],"-a")==0)
 			command_line_opts.getaccuracy=true;
+	//	else if(strcmp(argv[i],"-vn")==0)
+	//			command_line_opts.var_normalize=true;
 		else if(strcmp(argv[i],"-mem")==0)
 				command_line_opts.memory_efficient=true;
 		else if(strcmp(argv[i],"-nfm")==0)
