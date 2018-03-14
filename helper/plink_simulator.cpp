@@ -11,8 +11,14 @@
 #include "boost/numeric/ublas/vector.hpp"
 #include "boost/numeric/ublas/vector_proxy.hpp"
 #include "boost/numeric/ublas/triangular.hpp"
+#include "boost/accumulators/accumulators.hpp"
+#include "boost/accumulators/statistics/stats.hpp"
+#include "boost/accumulators/statistics/mean.hpp"
+#include "boost/accumulators/statistics/moment.hpp"
+#include "boost/accumulators/statistics/variance.hpp"
 namespace ublas = boost::numeric::ublas; 
 using namespace std; 
+using namespace boost::accumulators; 
 #include <bits/stdc++.h>
 
 
@@ -48,7 +54,7 @@ int main(int argc, char const *argv[])
 
 	if(argc<4){
 
-		cout<<"Correct Usage ./large_sim <Indv> <Snps> <h2g> <outFileHeader>  "<<endl; 
+		cout<<"Correct Usage ./simulator <Indv> <Snps> <h2g> <outFileHeader>  "<<endl; 
 	}
 	int n=atoi(argv[1]); 
 	int m=atoi(argv[2]); 
@@ -68,11 +74,13 @@ int main(int argc, char const *argv[])
 
 	boost::uniform_real<> dist2(0,1); 
 	boost::variate_generator<boost::mt19937&, boost::uniform_real<> > geno(gen, dist2); 
+//	geno.engine().seed(static_cast<unsigned int>(std::time(0))); 
 
 	//generate effect size beta
 
 	boost::normal_distribution<> dist3(0,sqrt(h2g/m));
 	boost::variate_generator<boost::mt19937&, boost::normal_distribution<> > effect_size(gen, dist3); 
+	effect_size.engine().seed(static_cast<unsigned int>(std::time(0)));
 	for(int i=0; i<m; i++)
 		beta(i,0) =  effect_size(); 
 
@@ -80,7 +88,8 @@ int main(int argc, char const *argv[])
 //	cout<<"printing beta: "<<endl<<beta<<endl; 
 
 	boost::normal_distribution<> dist4(0,sqrt(1-h2g)); 
-	boost::variate_generator<boost::mt19937&, boost::normal_distribution<> > e(gen, dist4); 
+	boost::variate_generator<boost::mt19937&, boost::normal_distribution<> > e(gen, dist4);
+	//e.engine().seed(static_cast<unsigned int>(std::time(0))); 
 	for(int i=0; i<n; i++) 
 		env(i,0)= e(); 
 
@@ -106,12 +115,15 @@ int main(int argc, char const *argv[])
 		ublas::matrix<int> G1(1,m); 
 		ublas::matrix<int> G2(1,m); 
 		ublas::matrix<int> G(1,m);
+		ublas::matrix<double> X(1,m);
+		accumulator_set<double, stats<tag::mean, tag::moment<2> > > acc; 
 		for(int j=0; j<m; j++)
 		{
 		double temp1=geno(); double temp2=geno(); 
-			G1(0,j) = (temp1<=panc[j]); G2(0,j)=(temp1<=panc[j]); 
+			G1(0,j) = (temp1<=panc[j]); G2(0,j)=(temp2<=panc[j]); 
 //			fprintf(fpgeno, "%d", G1(0,j)+G2(0,j)); 
-			int val= G1(0,j)+ G2(0,j); 
+			int val= G1(0,j)+ G2(0,j);
+			acc(val); 
 			bool temp=(j < m/2); 
 			if(val==0)
 			{
@@ -136,7 +148,15 @@ int main(int argc, char const *argv[])
 		fprintf(fped, "\n"); 
 		G = G1+G2;
 	//	fprintf(fpgeno, "\n");  
-		ublas::matrix<double> pheno = prod(G,beta);  
+		double g_mean = mean(acc);
+		double q = 0.5 *g_mean; 
+		double g_var =sqrt(2* q *(1-q)) ; 
+		for(int j=0;j<m; j++)
+			X(0,j) = (G(0,j)-g_mean) / g_var;
+		//cout<< "g mean : "<<g_mean<<endl<<"g std: "<<g_var<<endl ; 
+		//cout<<G<<endl;
+		//cout<<X <<endl;
+		ublas::matrix<double> pheno = prod(X,beta);  
 		fprintf(fppheno, "%d %d %f", i, 1,pheno(0,0)+env(i,0)); 
 		fprintf(fppheno, "\n"); 
 	}
