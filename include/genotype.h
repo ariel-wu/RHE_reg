@@ -15,7 +15,7 @@ class genotype {
 	std::vector<int> columnsum2;
 	std::vector<double> columnmeans;
 	std::vector<double> columnmeans2;
-	
+	int chromSNP[23]; 	
 	public:	
 
 		unsigned char mask;
@@ -57,7 +57,8 @@ class genotype {
 		double get_col_mean(int snpindex);
 		double get_col_sum(int snpindex);		
 		double get_col_sum2(int snpindes); 
-		double get_col_std(int snpindex);		
+		double get_col_std(int snpindex);	
+		int get_chrom_snp(int chromindex); 	
 		void update_col_mean(int snpindex,double value);
 
 		void generate_eigen_geno(Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &geno_matrix,bool var_normalize);

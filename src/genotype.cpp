@@ -157,7 +157,18 @@ void genotype::read_bim (string filename){
 	string line;
 	int j = 0 ;
 	int linenum = 0 ;
+        std::istringstream in;
+
+	for(int i=0; i<23; i++)
+		chromSNP[i]=0; 
 	while(std::getline (inp, line)){
+		in.clear();
+                in.str(line);
+                string temp;
+		in >> temp; 
+		int cur = atof(temp.c_str()); 
+		chromSNP[cur-1]++; 
+	
 		linenum ++;
 		char c = line[0];
 		if (c=='#')
@@ -232,13 +243,13 @@ void genotype::read_bed_mailman_nomissing (string filename )  {
 	for (int i = 0 ; i < Nsnp; i++){
 		int horiz_seg_no = i/segment_size_hori ;
 	   	ifs.read (reinterpret_cast<char*>(gtype), ncol*sizeof(unsigned char));   
-    	for (int k = 0 ;k < ncol ; k++) {
-        	unsigned char c = gtype [k];
+    		for (int k = 0 ;k < ncol ; k++) {
+        		unsigned char c = gtype [k];
 			// Extract PLINK genotypes
-        	y[0] = (c)&mask;
-        	y[1] = (c>>2)&mask;
-        	y[2] = (c>>4)&mask;
-        	y[3] = (c>>6)&mask;
+        		y[0] = (c)&mask;
+        		y[1] = (c>>2)&mask;
+        		y[2] = (c>>4)&mask;
+        		y[3] = (c>>6)&mask;
 			int j0 = k * unitsperword;
 			// Handle number of individuals not being a multiple of 4
 			int lmax = 4;
@@ -355,7 +366,6 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
    	char magic[3];
 	set_metadata ();
     gtype =  new unsigned char[ncol];
-
    	binary_read(ifs,magic);
 
 	msb.resize(Nsnp,std::vector<bool>(Nindv));
@@ -366,9 +376,9 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
 		not_O_j.resize(Nindv);	
 	}
 	
-	int sum=0;
+	int sum=0;int sum2=0; 
 	columnsum.resize (Nsnp);    
-
+	columnsum2.resize(Nsnp); 
 	// Note that the coding of 0 and 2 can get flipped relative to plink because plink uses allele frequency (minor)
 	// allele to code a SNP as 0 or 1.
 	// This flipping does not matter for results.
@@ -409,7 +419,7 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
 				}
 				val-- ; 
 				val =  (val < 0 ) ? 0 :val ;
-				sum += val;
+				sum += val;sum2 += val*val; 
 				if(val==0){
 					lsb[i][j] = false;
 					msb[i][j]= false;
@@ -430,7 +440,8 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
 			}
     	}
 		columnsum[i] = sum;
-		sum = 0 ;
+		columnsum2[i] = sum2;
+		sum = 0 ;sum2=0; 
 	}
 	init_means(allow_missing);	
 
@@ -500,14 +511,19 @@ double genotype::get_col_std(int snpindex){
 	return temp;
 }
 
+int genotype::get_chrom_snp(int chromindex){
+	return chromSNP[chromindex];  
+}
 void genotype::generate_eigen_geno(Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &geno_matrix,bool var_normalize){
 	for(int i=0;i<Nsnp;i++){
 		for(int j=0;j<Nindv;j++){
 			double m = msb[i][j];
 			double l = lsb[i][j];
-			double geno = (m*2.0+l) - get_col_mean(i);
-			if(var_normalize)
+			double geno = (m*2.0+l);
+			if(var_normalize){
+				geno =geno - get_col_mean(i); 
 				geno_matrix(i,j) = geno/get_col_std(i);
+			}
 			else
 				geno_matrix(i,j) = geno;
 		}
