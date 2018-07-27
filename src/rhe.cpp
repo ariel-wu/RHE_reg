@@ -767,7 +767,9 @@ int main(int argc, char const *argv[]){
 	MatrixXdr WW; // inv(w^TW) 
 	if(use_cov)
 	{
+		cout<<"computing WW... "<<endl; 
 		WW = (covariate.transpose()*covariate).inverse(); 
+		cout<<"finish  computing WW"<<endl; 
 		//pheno_prime.resize(cov_num, pheno_num); 
 		pheno_prime= covariate.transpose()* pheno; 
 	}
@@ -892,25 +894,15 @@ int main(int argc, char const *argv[]){
 		MatrixXdr Xzb = new_res- new_resid; 
 		if(use_cov)
 		{
-			MatrixXdr temp = covariate * WW * covariate.transpose() * zb;
-	                
+			MatrixXdr temp1 = WW * covariate.transpose() *Xzb.transpose(); 
+			MatrixXdr temp = covariate * temp1;
+			MatrixXdr Wzb  = zb.transpose() * temp;
+			tr_k_rsid += Wzb.trace(); 
+				
 			Xzb = Xzb - temp.transpose(); 
 		}
 		tr_k2+= (Xzb.array() * Xzb.array()).sum();  
 //		clock_t rest = clock(); 
-	
-		if(use_cov)
-		{
-			MatrixXdr zc= MatrixXdr::Random(10, g.Nsnp);
-			zc = zc* sqrt(3); 
-			MatrixXdr new_res (10, g.Nindv); 
-			multiply_y_post(zc, 10, new_res, false); 
-			MatrixXdr new_resid(10,g.Nindv);
-			MatrixXdr ab_scale_sum = zc * means;  
-			new_resid=  zb_scale_sum * MatrixXdr::Constant(1,g.Nindv, 1);
-			MatrixXdr Wzb = covariate* WW * (covariate.transpose()* (new_res-new_resid).transpose()); 
-			tr_k_rsid+= Wzb.trace(); 	
-		}		
 	}
 	tr_k2  = tr_k2 /10/g.Nsnp/g.Nsnp/B; 
 	tr_k_rsid = tr_k_rsid/10/g.Nsnp/B; 
@@ -930,7 +922,7 @@ int main(int argc, char const *argv[]){
 	}
 	MatrixXdr A(2,2); 
 	A(0,0)=tr_k2;
-	A(0,1)=tr_k; 
+	A(0,1)=tr_k-tr_k_rsid; 
 	A(1,0)= tr_k-tr_k_rsid; 
 	A(1,1)=g.Nindv-cov_num;
 	cout<<A<<endl;   
