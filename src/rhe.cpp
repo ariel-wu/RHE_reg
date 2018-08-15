@@ -48,7 +48,7 @@ double **y_m;
 
 struct timespec t0;
 
-clock_t total_begin = clock();
+//clock_t total_begin = clock();
 MatrixXdr pheno;
 MatrixXdr pheno_prime; 
 MatrixXdr covariate;  
@@ -588,8 +588,8 @@ pair<double,double> get_error_norm(MatrixXdr &c){
 
 int main(int argc, char const *argv[]){
 
-	clock_t io_begin = clock();
-    clock_gettime (CLOCK_REALTIME, &t0);
+	//clock_t io_begin = clock();
+    //clock_gettime (CLOCK_REALTIME, &t0);
 
 	pair<double,double> prev_error = make_pair(0.0,0.0);
 	double prevnll=0.0;
@@ -638,6 +638,7 @@ int main(int argc, char const *argv[]){
 	int B = command_line_opts.batchNum; 
 	k_orig = command_line_opts.num_of_evec ;
 	debug = command_line_opts.debugmode ;
+	float tr2= command_line_opts.tr2; 
 	check_accuracy = command_line_opts.getaccuracy;
 	var_normalize = true; 
 	accelerated_em = command_line_opts.accelerated_em;
@@ -670,7 +671,7 @@ int main(int argc, char const *argv[]){
 	}
 	
 	
-	clock_t io_end = clock();
+	//clock_t io_end = clock();
 
 	//TODO: Initialization of c with gaussian distribution
 	c = MatrixXdr::Random(p,k);
@@ -847,13 +848,13 @@ int main(int argc, char const *argv[]){
 //	boost::normal_distribution<> dist(0,1); 
 //	boost::mt19937 gen; 
 //	boost::variate_generator<boost::mt19937&, boost::normal_distribution<> > random_vec(gen,dist); 
-	
+	if(tr2<0){
 	//compute/estimating tr_k2
 	double tr_k2=0;
 	//DiagonalMatrix<double,a> Sigma(a); 
 	//Sigma.diagonal()=vec; 
 
-	clock_t it_begin =clock();
+	//clock_t it_begin =clock();
 	if(reg){ 
 	for(int i=0; i<B; i++){
 		//G^T zb 
@@ -876,7 +877,7 @@ int main(int argc, char const *argv[]){
 		resid = inter * zb_sum;
 		MatrixXdr zb1(g.Nindv,10); 
 		zb1 = res - resid; // X^Tzb =zb' 
-		clock_t Xtzb = clock(); 
+	//	clock_t Xtzb = clock(); 
 		//compute zb' %*% /Sigma 
 		//zb = Sigma*zb ; 
 		
@@ -920,8 +921,11 @@ int main(int argc, char const *argv[]){
 			tr_k2 += temp(i,i); 
 		tr_k2 = tr_k2 /p /p; 
 	}
+	tr2=tr_k2; 
+	}
+	
 	MatrixXdr A(2,2); 
-	A(0,0)=tr_k2;
+	A(0,0)=tr2;
 	A(0,1)=tr_k-tr_k_rsid; 
 	A(1,0)= tr_k-tr_k_rsid; 
 	A(1,1)=g.Nindv-cov_num;
@@ -940,14 +944,14 @@ int main(int argc, char const *argv[]){
 		cout<<"V(e): "<<herit(1,0)<<endl; 
 		cout<<"Vp "<<herit.sum()<<endl; 
 		cout<<"V(G)/Vp: "<<herit(0,0)/herit.sum()<<endl;   
-		double c = g.Nindv* (tr_k2/g.Nindv - tr_k*tr_k/g.Nindv/g.Nindv); 
+		double c = g.Nindv* (tr2/g.Nindv - tr_k*tr_k/g.Nindv/g.Nindv); 
 		
-		cout<<"SE: "<<sqrt(2/c)<<endl; 
+		//cout<<"SE: "<<sqrt(2/c)<<endl; 
 			
 
 		if(reg){
 		MatrixXdr se(1,1);
-		compute_se(pheno,se, vg,ve,tr_k2);
+		compute_se(pheno,se, vg,ve,tr2);
 
 		cout<<"Exact SE:"<<se<<endl;
 		}  
@@ -962,12 +966,12 @@ int main(int argc, char const *argv[]){
 				result += temp(i,i);
 				result1 += temp1(i,i); 
 			}
-			result = result*2 +  tr_k2/100*herit(0,0)*herit(0,0);
+			result = result*2 +  tr2/100*herit(0,0)*herit(0,0);
 			result = sqrt(result);
-			result = result / (tr_k2-g.Nindv);  
-			result1 = result1*2 + tr_k2/100*herit(0,0)*herit(0,0); 
+			result = result / (tr2-g.Nindv);  
+			result1 = result1*2 + tr2/100*herit(0,0)*herit(0,0); 
 			result1 = sqrt(result1); 	
-			result1 = result1 / (tr_k2 - g.Nindv); 
+			result1 = result1 / (tr2 - g.Nindv); 
 			cout<<"no random: "<<result<<endl; 
 			cout<<"approximate: "<<result1<<endl; 
 		}
@@ -1053,14 +1057,14 @@ int main(int argc, char const *argv[]){
 		}
 		fclose(fp);
 	} 
-	clock_t it_end = clock();
+	//clock_t it_end = clock();
 	
 		
-	clock_t total_end = clock();
-	double io_time = double(io_end - io_begin) / CLOCKS_PER_SEC;
-	double avg_it_time = double(it_end - it_begin) / (B * 1.0 * CLOCKS_PER_SEC);
-	double total_time = double(total_end - total_begin) / CLOCKS_PER_SEC;
-	cout<<"IO Time:  "<< io_time << "\nAVG Iteration Time:  "<<avg_it_time<<"\nTotal runtime:   "<<total_time<<endl;
+	//clock_t total_end = clock();
+//	double io_time = double(io_end - io_begin) / CLOCKS_PER_SEC;
+//	double avg_it_time = double(it_end - it_begin) / (B * 1.0 * CLOCKS_PER_SEC);
+//	double total_time = double(total_end - total_begin) / CLOCKS_PER_SEC;
+//	cout<<"IO Time:  "<< io_time << "\nAVG Iteration Time:  "<<avg_it_time<<"\nTotal runtime:   "<<total_time<<endl;
 
 	delete[] sum_op;
 	delete[] partialsums;

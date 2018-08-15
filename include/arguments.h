@@ -29,7 +29,7 @@ struct options{
 	bool text_version;
 	bool reg; 
 	bool gwas; 
-	
+	float tr2; 	
 };
 
 template<typename T, typename U>
@@ -205,6 +205,7 @@ void parse_args(int argc, char const *argv[]){
 	command_line_opts.text_version = false;
 	command_line_opts.reg=true; 
 	command_line_opts.gwas=false; 
+	command_line_opts.tr2=-1; 
 	if(argc<3){
 		cout<<"Correct Usage is "<<argv[0]<<" -g <genotype file> -p <phenotype file> -c <covaraite file> -b <zb/10> "<<endl;
 		exit(-1);
@@ -271,6 +272,10 @@ void parse_args(int argc, char const *argv[]){
 				command_line_opts.accelerated_em = atof(argv[i+1]);
 				i++;
 			}
+			else if(strcmp(argv[i], "-tr2")==0){
+                                command_line_opts.tr2=atof(argv[i+1]);
+                                i++;
+                        }
 			else if(strcmp(argv[i],"-v")==0)
 				command_line_opts.debugmode=true;
 			else if(strcmp(argv[i],"-a")==0)
