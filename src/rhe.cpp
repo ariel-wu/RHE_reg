@@ -1028,24 +1028,24 @@ int main(int argc, char const *argv[]){
 		cout<<"V(e): "<<herit(1,0)<<endl; 
 		cout<<"Vp "<<herit.sum()<<endl; 
 		cout<<"V(G)/Vp: "<<herit(0,0)/herit.sum()<<endl;   
-		double c = g.Nindv* (tr2/g.Nindv - tr_k*tr_k/g.Nindv/g.Nindv); 
+	//	double c = g.Nindv* (tr2/g.Nindv - tr_k*tr_k/g.Nindv/g.Nindv); 
 		
 	//	cout<<"SE: "<<sqrt(2/c)<<endl; 
 			
 
-		if(reg){
-		MatrixXdr se(1,1);
-		MatrixXdr pheno_i = pheno.block(0,i, g.Nindv, 1); 
-		if(use_cov)
-			pheno_i =pheno_prime.block(0,i,g.Nindv, 1); 
-		MatrixXdr Xy_i = Xy.block(0, i, g.Nsnp, 1); 
-		MatrixXdr pheno_sum2 = pheno_i.transpose() *pheno_i;
-		double pheno_variance = pheno_sum2(0,0) / (g.Nindv-1); 	
-		compute_se(Xy_i,pheno_i,se, vg,ve,tr2,B);
-		cout<<"phenotype variance: "<<pheno_variance<<endl; 
-		cout<<"sigma_g SE: "<<se<<endl; 
-		cout<<"h2g SE:"<<se/pheno_variance<<endl;
-		}  
+		//if(reg){
+		//MatrixXdr se(1,1);
+		//MatrixXdr pheno_i = pheno.block(0,i, g.Nindv, 1); 
+		//if(use_cov)
+		//	pheno_i =pheno_prime.block(0,i,g.Nindv, 1); 
+		//MatrixXdr Xy_i = Xy.block(0, i, g.Nsnp, 1); 
+		//MatrixXdr pheno_sum2 = pheno_i.transpose() *pheno_i;
+		//double pheno_variance = pheno_sum2(0,0) / (g.Nindv-1); 	
+		//compute_se(Xy_i,pheno_i,se, vg,ve,tr2,B);
+		//cout<<"phenotype variance: "<<pheno_variance<<endl; 
+		//cout<<"sigma_g SE: "<<se<<endl; 
+		//cout<<"h2g SE:"<<se/pheno_variance<<endl;
+		//}  
 		if(!reg){
 			MatrixXdr K = geno_matrix.transpose()* geno_matrix/p- MatrixXdr::Identity(n,n);
 			MatrixXdr C= herit(0,0)* geno_matrix.transpose()*geno_matrix /p + herit(1,0)*MatrixXdr::Identity(n,n); 
