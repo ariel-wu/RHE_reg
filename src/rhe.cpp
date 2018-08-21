@@ -81,6 +81,7 @@ bool use_cov=false;
 bool reg = true;
 bool gwas=false;  
 
+vector<string> pheno_name; 
 
 std::istream& newline(std::istream& in)
 {
@@ -101,11 +102,12 @@ int read_cov(bool std,int Nind, std::string filename, std::string covname){
 	int covNum=0;  
 	while(in>>b)
 	{
+		if(b!="FID" && b !="IID"){
 		missing.push_back(vector<int>()); //push an empty row  
 		if(b==covname && covname!="")
 			covIndex=covNum; 
 		covNum++; 
-
+		}
 	}
 	vector<double> cov_sum(covNum, 0); 
 	if(covname=="")
@@ -124,8 +126,10 @@ int read_cov(bool std,int Nind, std::string filename, std::string covname){
 	while(std::getline(ifs, line)){
 		in.clear(); 
 		in.str(line);
-		string temp; 
+		string temp;
+		in>>temp; in>>temp; //FID IID 
 		for(int k=0; k<covNum; k++){
+			
 			in>>temp;
 			if(temp=="NA")
 			{
@@ -210,6 +214,7 @@ int read_pheno2(int Nind, std::string filename){
 		if(b!="FID" && b !="IID"){
 			phenocount++;
 			missing.push_back(vector<int>());  
+			pheno_name.push_back(b); 
 		}
 	} 
 	vector<double> pheno_sum(phenocount,0); 
@@ -483,19 +488,22 @@ void multiply_y_pre(MatrixXdr &op, int Ncol_op ,MatrixXdr &res,bool subtract_mea
 			multiply_y_pre_naive(op,Ncol_op,res);
 	}
 }
-void compute_se(MatrixXdr &y,MatrixXdr &se, double h2g, double h2e,double tr_k2 )
+void compute_se(MatrixXdr &Xy, MatrixXdr &y,MatrixXdr &se, double h2g, double h2e,double tr_k2, int B )
 {
+	//compute X^T y
+	//input X^y[i] p*1 vector
 	cout<<"p: "<<p << "  n: "<<n<<endl; 
-	MatrixXdr zb=y;
-	double zb_sum=zb.sum(); 
-	MatrixXdr res(p, 1);
-	multiply_y_pre_fast(zb, 1, res, false);
-	for(int j=0; j<p; j++)
-		res(j,0)= res(j,0)*stds(j,0); 
-	MatrixXdr resid(p, 1);
-	MatrixXdr inter=means.cwiseProduct(stds); 
-	resid = inter * zb_sum; 
-	zb = res - resid; 
+	MatrixXdr zb=Xy;
+//	double zb_sum=zb.sum(); 
+//	MatrixXdr res(p, 1);
+//	multiply_y_pre_fast(zb, 1, res, false);
+//	for(int j=0; j<p; j++)
+//		res(j,0)= res(j,0)*stds(j,0); 
+//	MatrixXdr resid(p, 1);
+//	MatrixXdr inter=means.cwiseProduct(stds); 
+//	resid = inter * zb_sum; 
+//	zb = res - resid; 
+	//compute XXy
 	for(int j=0; j<p; j++)
 		zb(j, 0)= zb(j,0)*stds(j,0); 
 	MatrixXdr new_zb = zb.transpose(); 
@@ -506,23 +514,28 @@ void compute_se(MatrixXdr &y,MatrixXdr &se, double h2g, double h2e,double tr_k2 
 	new_resid= zb_scale_sum* MatrixXdr::Constant(1,n, 1); 
 	MatrixXdr alpha = (new_res-new_resid).transpose() ;
 	//MatrixXdr alpha= new_res.transpose(); 
+	//compute Ky
 	for(int j=0; j< n; j++)
 		alpha(j,0)= alpha(j,0)/p ;
+	//alpha = (K-I)y 
 	alpha = alpha -y; 
 //	MatrixXdr true_alpha = (geno_matrix.transpose()* geno_matrix/p- MatrixXdr::Identity(n,n))*y;
 //	cout<<true_alpha<<endl; 
+	MatrixXdr res(p,1); 
+	MatrixXdr resid(p,1); 
+	MatrixXdr inter = means.cwiseProduct(stds); 
 	multiply_y_pre_fast(alpha, 1, res, false); 
 	for(int j=0; j<p;j++)
 		res(j,0)=res(j,0)*stds(j,0); 
 	inter = means.cwiseProduct(stds); 
 	resid = inter * alpha.sum(); 
-	MatrixXdr Xy(p,1); 
-	Xy = res-resid;
+	MatrixXdr Xalpha(p,1); 
+	Xalpha = res-resid;
 	//Xy =res;
-	double yKy = (Xy.array()*Xy.array()).sum() / p; 
+	double yKy = (Xalpha.array()*Xalpha.array()).sum() / p; 
 	double temp =(alpha.array()*alpha.array()).sum();  
 	double result = yKy*h2g+temp*h2e; 
-	result = 2*result + h2g*h2g*tr_k2/100;
+	result = 2*result + h2g*h2g*tr_k2/10/B;
 	//cout<<result; 
 	result = sqrt(result) / (tr_k2-n);  
 	MatrixXdr result1(1,1); 
@@ -756,7 +769,8 @@ int main(int argc, char const *argv[]){
 	MatrixXdr y_mean = y_sum/g.Nindv;
 	for(int i=0; i<g.Nindv; i++) 
 		pheno.block(i,0,1,pheno_num) =pheno.block(i,0,1,pheno_num) - y_mean; //center phenotype	
-	y_sum=pheno.colwise().sum(); 
+	y_sum=pheno.colwise().sum();
+	cout<<"y_sum: "<<y_sum<<endl;  
 	//correctness check 
 	//MatrixXdr zb = MatrixXdr::Random(1, g.Nsnp); 
 	//MatrixXdr res(1,g.Nindv); 
@@ -774,47 +788,116 @@ int main(int argc, char const *argv[]){
 		//pheno_prime.resize(cov_num, pheno_num); 
 		pheno_prime= covariate.transpose()* pheno; 
 	}
-	MatrixXdr res(g.Nsnp, pheno_num); 
-	multiply_y_pre(pheno,pheno_num,res,false); 
-	for(int i=0; i<pheno_num; i++){
-		MatrixXdr cur= res.block(0,i,g.Nsnp, 1); 
-		res.block(0,i,g.Nsnp, 1)  = cur.cwiseProduct(stds);
-	} 
-	MatrixXdr resid(g.Nsnp, pheno_num); 
-	for(int i=0; i<pheno_num; i++)
+	MatrixXdr yKy(pheno_num, 1);
+	MatrixXdr Xy(g.Nsnp, pheno_num); 
+	if(pheno_num<10)
 	{
-		resid.block(0,i,g.Nsnp, 1) = means.cwiseProduct(stds)*y_sum(0,i); 
+		MatrixXdr res(g.Nsnp, pheno_num);
+        	multiply_y_pre(pheno,pheno_num,res,false);
+        	for(int i=0; i<pheno_num; i++){
+                	MatrixXdr cur= res.block(0,i,g.Nsnp, 1);
+                	res.block(0,i,g.Nsnp, 1)  = cur.cwiseProduct(stds);
+        	}
+        	MatrixXdr resid(g.Nsnp, pheno_num);
+        	for(int i=0; i<pheno_num; i++)
+        	{
+               		resid.block(0,i,g.Nsnp, 1) = means.cwiseProduct(stds)*y_sum(0,i);
+        	}
+                Xy = res-resid;
+        	MatrixXdr temp = Xy.transpose() *Xy; 
+		//for(k =0; k<pheno_num; k++)
+		//	yKy(k, 0) = temp(k,k); 
+		yKy= temp.diagonal();
 	}
+	else{
+	for(int i=0; i*10<pheno_num; i++){
+		int col_num = 10; 
+		if( (pheno_num-i*10)<10)
+			col_num = pheno_num-i*10;	
+		MatrixXdr pheno_block = pheno.block( 0, i*10,g.Nindv, col_num);  
+		MatrixXdr res(g.Nsnp, col_num); 
+		multiply_y_pre(pheno_block,col_num,res,false);
+		for(int j=0; j<col_num; j++){
+			MatrixXdr cur= res.block(0,j,g.Nsnp, 1); 
+			res.block(0,j,g.Nsnp, 1)  = cur.cwiseProduct(stds);
+		} 
+		MatrixXdr resid(g.Nsnp, col_num); 
+		for(int j=0; j<col_num; j++)
+		{
+			resid.block(0,j,g.Nsnp, 1) = means.cwiseProduct(stds)*y_sum(0,i*10+j); 
+		}
 	//resid = means.cwiseProduct(stds); //one phenotype
 	//resid = resid *y_sum; 	//one phenotype
-	MatrixXdr Xy(g.Nsnp,pheno_num); 
-	Xy = res-resid;
-	MatrixXdr yKy = Xy.transpose() * Xy;  
+		Xy.block(0, i*10, g.Nsnp, col_num) = res-resid;
+		MatrixXdr Xy_cur = Xy.block(0, i*10, g.Nsnp, col_num); 
+		MatrixXdr temp = Xy_cur.transpose() * Xy_cur;
+		yKy.block(i*10, 0, col_num, 1)  = temp.diagonal();   
+	}
 	//double yKy = (Xy.array()* Xy.array()).sum();  //one phenotype 
+	}	
 	yKy = yKy/g.Nsnp;
 	if(!reg | !fast_mode)
 	{
+		MatrixXdr Xy (g.Nsnp, pheno_num); 
 		Xy = geno_matrix * pheno; 
-		yKy = Xy.transpose()*Xy / g.Nsnp; 
+		MatrixXdr temp = Xy.transpose()*Xy; 
+		yKy= temp.diagonal(); 
+		yKy = yKy /g.Nsnp;  
 	}
 	if(use_cov)
 	{
 		MatrixXdr y_temp = pheno-covariate* WW * pheno_prime; 
 		//cout<<covariate* WW * pheno_prime;
 		MatrixXdr y_temp_sum=y_temp.colwise().sum();
-		multiply_y_pre(y_temp,pheno_num,res,false);
-		for(int i=0; i<pheno_num; i++){
-                MatrixXdr cur= res.block(0,i,g.Nsnp, 1);
-                res.block(0,i,g.Nsnp, 1)  = cur.cwiseProduct(stds);
-	      }
-        	for(int i=0; i<pheno_num; i++)
-        	{
-                	resid.block(0,i,g.Nsnp, 1) = means.cwiseProduct(stds)*y_temp_sum(0,i);
-        	}
-		Xy = res-resid;
-		yKy = Xy.transpose() * Xy;
+		if(pheno_num<10)
+		{
+			MatrixXdr res(g.Nsnp, pheno_num);
+			multiply_y_pre(y_temp,pheno_num,res,false);
+                	for(int i=0; i<pheno_num; i++){
+                		MatrixXdr cur= res.block(0,i,g.Nsnp, 1);
+                		res.block(0,i,g.Nsnp, 1)  = cur.cwiseProduct(stds);
+              		}
+			MatrixXdr resid(g.Nsnp, pheno_num);
+              		  for(int i=0; i<pheno_num; i++)
+                	{
+                        	resid.block(0,i,g.Nsnp, 1) = means.cwiseProduct(stds)*y_temp_sum(0,i);
+                	}
+                	Xy = res-resid;
+                	MatrixXdr temp = Xy.transpose() *Xy;
+                	yKy = temp.diagonal();
+
+
+		}	
+	
+		else{
+		for(int j=0; j*10<pheno_num; j++){
+			int col_num = 10;
+	                if( (pheno_num-j*10)<10)
+        	                col_num = pheno_num-j*10;
+			MatrixXdr pheno_block = y_temp.block( 0, j*10,g.Nindv, col_num);
+	                MatrixXdr res(g.Nsnp, col_num);
+
+			multiply_y_pre(pheno_block,col_num,res,false);
+			for(int i=0; i<col_num; i++){
+                		MatrixXdr cur= res.block(0,i,g.Nsnp, 1);
+                		res.block(0,i,g.Nsnp, 1)  = cur.cwiseProduct(stds);
+	      		}
+	                MatrixXdr resid(g.Nsnp, col_num);
+        		for(int i=0; i<col_num; i++)
+        		{
+                		resid.block(0,i,g.Nsnp, 1) = means.cwiseProduct(stds)*y_temp_sum(0,j*10+i);
+        		}
+			Xy.block(0, j*10, g.Nsnp, col_num) = res-resid; 
+			MatrixXdr Xy_cur = Xy.block(0, j*10, g.Nsnp, col_num); 
+			MatrixXdr temp = Xy_cur.transpose()*Xy_cur;
+                	yKy.block(j*10, 0, col_num, 1)  = temp.diagonal();
+
+
+		}
+		cout<<Xy<<endl; 
+		}
 		yKy = yKy/g.Nsnp;
-		//cout<<yKy; 
+		cout<<"Use covariate: "<<endl;
 	} 
 //	cout<< "yKy: "<<yKy<<endl;  
 	//compute yy
@@ -932,9 +1015,10 @@ int main(int argc, char const *argv[]){
 	cout<<A<<endl;   
 	double vg,ve; 
 	for(int i=0; i<pheno_num; i++){
-		cout<< "Variance Component estimation for phenotype "<<i+1<<" :"<<endl; 
+		cout<< "Variance Component estimation for phenotype "<<i+1<<" "<<pheno_name[i]<<" :"<<endl; 
 		MatrixXdr b(2,1); 
-		b(0,0) = yKy(i,i); 
+		cout<<"b: "<<endl<<b<<endl; 
+		b(0,0) = yKy(i,0); 
 		b(1,0) = yy(i,i); 
 		MatrixXdr herit = A.colPivHouseholderQr().solve(b); 
 		cout<<"V(G): "<<herit(0,0)<<endl;
@@ -946,14 +1030,21 @@ int main(int argc, char const *argv[]){
 		cout<<"V(G)/Vp: "<<herit(0,0)/herit.sum()<<endl;   
 		double c = g.Nindv* (tr2/g.Nindv - tr_k*tr_k/g.Nindv/g.Nindv); 
 		
-		//cout<<"SE: "<<sqrt(2/c)<<endl; 
+	//	cout<<"SE: "<<sqrt(2/c)<<endl; 
 			
 
 		if(reg){
 		MatrixXdr se(1,1);
-		compute_se(pheno,se, vg,ve,tr2);
-
-		cout<<"Exact SE:"<<se<<endl;
+		MatrixXdr pheno_i = pheno.block(0,i, g.Nindv, 1); 
+		if(use_cov)
+			pheno_i =pheno_prime.block(0,i,g.Nindv, 1); 
+		MatrixXdr Xy_i = Xy.block(0, i, g.Nsnp, 1); 
+		MatrixXdr pheno_sum2 = pheno_i.transpose() *pheno_i;
+		double pheno_variance = pheno_sum2(0,0) / (g.Nindv-1); 	
+		compute_se(Xy_i,pheno_i,se, vg,ve,tr2,B);
+		cout<<"phenotype variance: "<<pheno_variance<<endl; 
+		cout<<"sigma_g SE: "<<se<<endl; 
+		cout<<"h2g SE:"<<se/pheno_variance<<endl;
 		}  
 		if(!reg){
 			MatrixXdr K = geno_matrix.transpose()* geno_matrix/p- MatrixXdr::Identity(n,n);
@@ -976,18 +1067,18 @@ int main(int argc, char const *argv[]){
 			cout<<"approximate: "<<result1<<endl; 
 		}
 	}
-	if(pheno_num>1){
-		cout<<"Coheritability factor estimation: " <<endl; 
-		MatrixXdr b(2,1); 
-		b(0,0)= yKy(0,1);
-		b(1,0)= yy(0,1);
-		MatrixXdr herit  = A.colPivHouseholderQr().solve(b); 
-		cout<<"rho_g: "<<herit(0,0)<<endl;
-		cout<<"rho_e: "<<herit(1,0)<<endl; 
-		cout<<"Genetic Correlation: "<<herit(0,0)/sqrt(VarComp(0,0))/sqrt(VarComp(1,0))<<endl;
-		cout<<"Env Correlation: "<<herit(1,0)/sqrt(1-VarComp(0,0))/sqrt(1-VarComp(1,0))<<endl;
-			
-	} 
+//	if(pheno_num>1){
+//		cout<<"Coheritability factor estimation: " <<endl; 
+//		MatrixXdr b(2,1); 
+//		b(0,0)= yKy(0,1);
+//		b(1,0)= yy(0,1);
+//		MatrixXdr herit  = A.colPivHouseholderQr().solve(b); 
+//		cout<<"rho_g: "<<herit(0,0)<<endl;
+//		cout<<"rho_e: "<<herit(1,0)<<endl; 
+//		cout<<"Genetic Correlation: "<<herit(0,0)/sqrt(VarComp(0,0))/sqrt(VarComp(1,0))<<endl;
+//		cout<<"Env Correlation: "<<herit(1,0)/sqrt(1-VarComp(0,0))/sqrt(1-VarComp(1,0))<<endl;
+//			
+//	} 
 	if(gwas){
 		//normalize phenotype
 		std::string filename=command_line_opts.PHENOTYPE_FILE_PATH; 
