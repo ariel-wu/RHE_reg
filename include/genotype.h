@@ -38,14 +38,16 @@ class genotype {
 		
 		void init_means(bool is_missing);
 
+		float get_observed_pj(const std::string &line); 
+		float get_observed_pj(const unsigned char* line); 
+
 		void read_txt_naive(std::string filename,bool allow_missing);
 		
 		void read_txt_mailman (std::string filename,bool allow_missing);
 
 		void read_plink (std::string filenameprefix, bool allow_missing,bool mailman_mode);
 		void read_bed (std::string filename, bool allow_missing, bool mailman_mode )  ;
-		void read_bed_mailman_missing (std::string filename )  ;
-		void read_bed_mailman_nomissing (std::string filename )  ;
+		void read_bed_mailman (std::string filename,bool allow_missing )  ;
 		void read_bed_naive (std::string filename ,bool allow_missing)  ;
 		
 		void read_fam (std::string filename )  ;

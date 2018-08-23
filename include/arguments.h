@@ -17,6 +17,7 @@ struct options{
 	std::string COVARIATE_FILE_PATH; 
 	std::string COVARIATE_NAME; 
 	std::string OUTPUT_PATH;
+	int pheno_idx; 
 	int batchNum; 
 	int num_of_evec ;
 	bool getaccuracy ;
@@ -206,6 +207,7 @@ void parse_args(int argc, char const *argv[]){
 	command_line_opts.reg=true; 
 	command_line_opts.gwas=false; 
 	command_line_opts.tr2=-1; 
+	command_line_opts.pheno_idx=0; 
 	if(argc<3){
 		cout<<"Correct Usage is "<<argv[0]<<" -g <genotype file> -p <phenotype file> -c <covaraite file> -b <zb/10> "<<endl;
 		exit(-1);
@@ -262,6 +264,10 @@ void parse_args(int argc, char const *argv[]){
 			}
 			else if(strcmp(argv[i],"-b")==0){
 				command_line_opts.batchNum=atoi(argv[i+1]); 
+				i++; 
+			}
+			else if(strcmp(argv[i], "-mpheno")==0){
+				command_line_opts.pheno_idx=atoi(argv[i+1]); 
 				i++; 
 			}
 			else if(strcmp(argv[i], "-gwas")==0){
