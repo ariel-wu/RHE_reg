@@ -16,6 +16,62 @@ void genotype::init_means(bool is_missing){
 	}
 }
 
+float genotype::get_observed_pj(const std::string &line){
+	int observed_sum=0;
+	int observed_ct=0;
+	for(int j=0;j<line.size();j++){
+		int val = int(line[j]-'0');
+		if(val==0 || val==1 || val==2){
+			observed_sum+=val;
+			observed_ct++;
+		}
+	}
+ 	float p_j = observed_sum*1.0/observed_ct;
+	return p_j;
+}
+
+float genotype::get_observed_pj(const unsigned char* line){
+	int y[4];
+	int observed_sum=0;
+	int observed_ct=0;
+	
+	for (int k = 0 ;k < ncol ; k++) {
+		unsigned char c = line [k];
+		y[0] = (c)&mask;
+		y[1] = (c>>2)&mask;
+		y[2] = (c>>4)&mask;
+		y[3] = (c>>6)&mask;
+		int j0 = k * unitsperword;
+		int lmax = 4;
+		if (k == ncol - 1)  {
+			lmax = Nindv%4;
+			lmax = (lmax==0)?4:lmax;
+		}	
+		for ( int l = 0 ; l < lmax; l++){
+			int j = j0 + l ;
+			int ver_seg_no = j/segment_size_ver ;
+			int val = y[l];
+			val-- ;
+			if(val != 0){
+				val =  (val < 0 ) ? 0 :val ;
+				observed_sum += val;
+				observed_ct ++;
+			}
+		}
+	}
+	return observed_sum*1.0/observed_ct;	
+ }
+
+int simulate_geno_from_random(float p_j){
+	float rval = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+	float dist_pj[3] = { (1-p_j)*(1-p_j), 2*p_j*(1-p_j), p_j*p_j };
+	if(rval < dist_pj[0] )
+		return 0;
+	else if( rval >= dist_pj[0] && rval < (dist_pj[0]+dist_pj[1]))
+		return 1;
+	else
+		return 2; 
+}
 void genotype::read_txt_naive (std::string filename,bool allow_missing){
 	
 	ifstream ifs (filename.c_str(), ios::in);                                       
@@ -38,9 +94,13 @@ void genotype::read_txt_naive (std::string filename,bool allow_missing){
 	vector <bool> m;
 	vector <bool> l;
 	while(std::getline(ifs,line)){
+		float p_j = get_observed_pj(line); 
 		int sum=0;
 		for(int j=0;j<line.size();j++){
-			int val = int(line[j]-'0');	
+			int val = int(line[j]-'0');
+			if(val==9 && !allow_missing){
+				val=simulate_geno_from_random(p_j);
+			}	
 			if(val==0){
 				l.push_back(false);
 				m.push_back(false);
@@ -63,7 +123,6 @@ void genotype::read_txt_naive (std::string filename,bool allow_missing){
 			}
 			else{
 				cout<<"Invalid entry in Genotype Matrix"<<endl;
-				cout<<"If there is Missing data, run with -miss flag"<<endl;
 				exit(-1);				
 			}
 		}
@@ -103,10 +162,14 @@ void genotype::read_txt_mailman (std::string filename,bool allow_missing){
 	int i=0;
 
 	while(std::getline(ifs,line)){
+		float p_j =get_observed_pj(line); 
 		int horiz_seg_no = i/segment_size_hori ;
 		int sum=0;
 		for(int j=0;j<line.size();j++){
 			int val = int(line[j]-'0');
+			if(val==9 && !allow_missing){
+				val=simulate_geno_from_random(p_j);
+			}
 			if(val==0 || val==1 || val==2){
 				sum+=val;
 				p[horiz_seg_no][j] = (3 * p[horiz_seg_no][j]) + val ;
@@ -118,7 +181,6 @@ void genotype::read_txt_mailman (std::string filename,bool allow_missing){
 			}
 			else{
 				cout<<"ERROR: Invalid character in genotype file"<<endl;
-				cout<<"If there is Missing data, run with -miss flag"<<endl;				
 				exit(-1);
 			}			
 		}
@@ -216,7 +278,7 @@ void genotype::set_metadata() {
     ncol = ceil(1.0*Nindv/unitsperword);
 }
 
-void genotype::read_bed_mailman_nomissing (string filename )  {
+void genotype::read_bed_mailman (string filename ,bool allow_missing)  {
    	ifstream ifs (filename.c_str(), ios::in|ios::binary);                                       
    	char magic[3];
 	set_metadata ();
@@ -229,6 +291,11 @@ void genotype::read_bed_mailman_nomissing (string filename )  {
 	segment_size_hori = segment_size_hori>0?segment_size_hori:1;
 	Nsegments_hori = ceil(Nsnp*1.0/(segment_size_hori*1.0));
 	p.resize(Nsegments_hori,std::vector<int>(Nindv));
+	
+	if(allow_missing){
+ 		not_O_i.resize(Nsnp);
+ 		not_O_j.resize(Nindv);
+ 	}
 	
 	int sum=0;
 	int sum2 = 0;
@@ -243,7 +310,8 @@ void genotype::read_bed_mailman_nomissing (string filename )  {
 	for (int i = 0 ; i < Nsnp; i++){
 		int horiz_seg_no = i/segment_size_hori ;
 	   	ifs.read (reinterpret_cast<char*>(gtype), ncol*sizeof(unsigned char));   
-    		for (int k = 0 ;k < ncol ; k++) {
+    		float p_j = get_observed_pj(gtype); 
+		for (int k = 0 ;k < ncol ; k++) {
         		unsigned char c = gtype [k];
 			// Extract PLINK genotypes
         		y[0] = (c)&mask;
@@ -271,6 +339,15 @@ void genotype::read_bed_mailman_nomissing (string filename )  {
 				// 10->1
 				// 11->2
 				int val = y[l];
+				if(val==1 && !allow_missing){
+					val = simulate_geno_from_random(p_j);
+					val++;
+					val = (val==1) ? 0 : val;
+				}
+				if(val==1 && allow_missing){
+					not_O_i[i].push_back(j);
+					not_O_j[j].push_back(i);
+				}
 				val-- ; 
 				val =  (val < 0 ) ? 0 :val ;
 				sum += val;
@@ -288,77 +365,6 @@ void genotype::read_bed_mailman_nomissing (string filename )  {
 	delete[] gtype;
 }
 
-void genotype::read_bed_mailman_missing (string filename )  {
-
-	ifstream ifs (filename.c_str(), ios::in|ios::binary);                                       
-   	char magic[3];
-	set_metadata ();
-    gtype =  new unsigned char[ncol];
-
-   	binary_read(ifs,magic);
-
-	segment_size_hori = floor(log(Nindv)/log(3)) - 2 ;
-	Nsegments_hori = ceil(Nsnp*1.0/(segment_size_hori*1.0));
-	p.resize(Nsegments_hori,std::vector<int>(Nindv));
-	not_O_i.resize(Nsnp);
-	not_O_j.resize(Nindv);	
-	
-	int sum=0;
-	columnsum.resize (Nsnp);    
-
-	// Note that the coding of 0 and 2 can get flipped relative to plink because plink uses allele frequency (minor)
-	// allele to code a SNP as 0 or 1.
-	// This flipping does not matter for results.
-	vector<int> v (Nindv);
-	int y[4];
-	for (int i = 0 ; i < Nsnp; i++){
-		int horiz_seg_no = i/segment_size_hori ;
-	   	ifs.read (reinterpret_cast<char*>(gtype), ncol*sizeof(unsigned char));   
-    	for (int k = 0 ;k < ncol ; k++) {
-        	unsigned char c = gtype [k];
-			// Extract PLINK genotypes
-        	y[0] = (c)&mask;
-        	y[1] = (c>>2)&mask;
-        	y[2] = (c>>4)&mask;
-        	y[3] = (c>>6)&mask;
-			int j0 = k * unitsperword;
-			// Handle number of individuals not being a multiple of 4
-			int lmax = 4;
-			if (k == ncol - 1)  {
-				lmax = Nindv%4;
-				lmax = (lmax==0)?4:lmax;
-			}	
-			// Note  : Plink uses different values for coding genotypes
-			// Note  : Does not work for missing values
-			// To handle missing data it is recommended to write a separate function. This is easy to do.
-			// This will avoid the performance hit of checking for and handling missing values
-			for ( int l = 0 ; l < lmax; l++){
-				int j = j0 + l ;
-				int ver_seg_no = j/segment_size_ver ;
-				// Extract  PLINK coded genotype and convert into 0/1/2
-				// PLINK coding: 
-				// 00->0
-				// 01->missing
-				// 10->1
-				// 11->2
-				int val = y[l];
-				if(val==1){
-					not_O_i[i].push_back(j);
-					not_O_j[j].push_back(i);
-				}
-				val-- ; 
-				val =  (val < 0 ) ? 0 :val ;
-				sum += val;
-				p[horiz_seg_no][j] = 3 * p[horiz_seg_no][j]  + val;
-			}
-    	}
-		columnsum[i] = sum;
-		sum = 0 ;
-	}
-	init_means(true);	
-
-	delete[] gtype;
-}
 
 void genotype::read_bed_naive (string filename, bool allow_missing)  {
 
@@ -386,6 +392,7 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
 	int y[4];
 	for (int i = 0 ; i < Nsnp; i++){
 	   	ifs.read (reinterpret_cast<char*>(gtype), ncol*sizeof(unsigned char));   
+		float p_j =get_observed_pj(gtype); 
     	for (int k = 0 ;k < ncol ; k++) {
         	unsigned char c = gtype [k];
 			// Extract PLINK genotypes
@@ -413,6 +420,11 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
 				// 10->1
 				// 11->2
 				int val = y[l];
+				if(val==1 && !allow_missing){
+					val = simulate_geno_from_random(p_j);
+					val++;
+					val = (val==1) ? 0 : val;
+				}
 				if(val==1 && allow_missing){
 					not_O_i[i].push_back(j);
 					not_O_j[j].push_back(i);
@@ -434,7 +446,6 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
 				}
 				else{
 					cout<<"Invalid entry in Genotype Matrix"<<endl;
-					cout<<"If there is Missing data, run with -miss flag"<<endl;
 					exit(-1);				
 				}
 			}
@@ -451,10 +462,7 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
 
 void genotype::read_bed (string filename, bool allow_missing, bool mailman_mode )  {
 	if(mailman_mode){
-		if (allow_missing)
-			read_bed_mailman_missing (filename);
-		else
-			read_bed_mailman_nomissing (filename);
+		read_bed_mailman(filename, allow_missing); 
 	}
 	else{
 		read_bed_naive(filename,allow_missing);
