@@ -228,9 +228,14 @@ int read_pheno2(int Nind, std::string filename,int pheno_idx){
 			missing.push_back(vector<int>());  
 			pheno_name.push_back(b); 
 		}
-	} 
+	}
+	if(pheno_idx !=0)
+		pheno_name[0] = pheno_name[pheno_idx-1];   
 	vector<double> pheno_sum(phenocount,0); 
-	pheno.resize(Nind, phenocount);
+	if(pheno_idx !=0)
+		pheno.resize(Nind,1); 
+	else
+		pheno.resize(Nind, phenocount);
 	int i=0;  
 	while(std::getline(ifs, line)){
 		in.clear(); 
@@ -270,6 +275,8 @@ int read_pheno2(int Nind, std::string filename,int pheno_idx){
 			int index = missing[a][b]; 
 			pheno(index, a)= pheno_avg; 
 		}
+		if(pheno_idx!=0)
+			return 1;  
 	}
 	return phenocount; 
 }
@@ -863,7 +870,6 @@ int main(int argc, char const *argv[]){
 	if(covfile!=""){
 		use_cov=true; 
 		cov_num=read_cov(true,g.Nindv, covfile, covname); 
-		cout<<"covariate: "<<covariate.block(0,0,10,1)<<endl; 
 	//	cout<<cov_num<<endl; 
 	} 
 	else if(covfile=="")
