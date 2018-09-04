@@ -30,6 +30,7 @@ struct options{
 	bool text_version;
 	bool reg; 
 	bool gwas; 
+	bool bpheno; 
 	float tr2; 	
 };
 
@@ -208,6 +209,7 @@ void parse_args(int argc, char const *argv[]){
 	command_line_opts.gwas=false; 
 	command_line_opts.tr2=-1; 
 	command_line_opts.pheno_idx=0; 
+	command_line_opts.bpheno=false; 
 	if(argc<3){
 		cout<<"Correct Usage is "<<argv[0]<<" -g <genotype file> -p <phenotype file> -c <covaraite file> -b <zb/10> "<<endl;
 		exit(-1);
@@ -274,6 +276,10 @@ void parse_args(int argc, char const *argv[]){
 				command_line_opts.gwas=true; 
 				i++; 
 			}
+			else if(strcmp(argv[i], "-binary")==0){
+				command_line_opts.bpheno=true; 
+				i++; 
+			}
 			else if(strcmp(argv[i],"-aem")==0){
 				command_line_opts.accelerated_em = atof(argv[i+1]);
 				i++;
@@ -290,11 +296,15 @@ void parse_args(int argc, char const *argv[]){
 				command_line_opts.memory_efficient=true;
 			else if(strcmp(argv[i],"-miss")==0)
 				command_line_opts.missing=true;
-			else if(strcmp(argv[i],"-nfm")==0)
+			else if(strcmp(argv[i],"-nfm")==0){
 				command_line_opts.fast_mode=false;
+				i++; 
+				}
 			else if(strcmp(argv[i],"-nreg")==0){
-				cout<<"set false"<<endl; 
-				command_line_opts.reg=false;} 
+				cout<<"set false"<<endl;  
+				command_line_opts.reg=false;
+				i++; 
+				} 
 			else if(strcmp(argv[i],"-txt")==0)
 				command_line_opts.text_version=true;
 			
