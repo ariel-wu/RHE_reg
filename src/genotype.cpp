@@ -4,15 +4,17 @@
 
 using namespace std;
 
-void genotype::init_means(bool is_missing){
+void genotype::init_means(bool is_missing, int pheno_num,Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &exist_ind){
 
-	columnmeans.resize(Nsnp);
+	columnmeans.resize(pheno_num, std::vector<double>(Nsnp));;
 	for(int i=0;i<Nsnp;i++){
-		double sum = columnsum[i];
+		for(int phenoi=0; phenoi<pheno_num; phenoi++){
+		double sum = columnsum[phenoi][i];
 		if(is_missing)
-			columnmeans[i] = sum*1.0/(Nindv-not_O_i[i].size());
+			columnmeans[phenoi][i] = sum*1.0/(exist_ind(0,phenoi)-not_O_i[i].size());
 		else
-			columnmeans[i] = sum*1.0/Nindv;
+			columnmeans[phenoi][i] = sum*1.0/exist_ind(0,phenoi);
+	}
 	}
 }
 
@@ -127,13 +129,13 @@ void genotype::read_txt_naive (std::string filename,bool allow_missing){
 			}
 		}
 		i++;
-		columnsum.push_back(sum);
+//		columnsum.push_back(sum);
 		msb.push_back(m);
 		lsb.push_back(l);
 		m.clear();
 		l.clear();
 	}
-	init_means(allow_missing);
+//	init_means(allow_missing);
 }
 
 
@@ -185,9 +187,9 @@ void genotype::read_txt_mailman (std::string filename,bool allow_missing){
 			}			
 		}
 		i++;
-		columnsum.push_back(sum);
+//		columnsum.push_back(sum);
 	}
-	init_means(allow_missing);	
+//	init_means(allow_missing);	
 }
 
 
@@ -278,7 +280,7 @@ void genotype::set_metadata() {
     ncol = ceil(1.0*Nindv/unitsperword);
 }
 
-void genotype::read_bed_mailman (string filename ,bool allow_missing)  {
+void genotype::read_bed_mailman (string filename ,bool allow_missing, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &pheno_mask, int pheno_num)  {
    	ifstream ifs (filename.c_str(), ios::in|ios::binary);                                       
    	char magic[3];
 	set_metadata ();
@@ -297,10 +299,18 @@ void genotype::read_bed_mailman (string filename ,bool allow_missing)  {
  		not_O_j.resize(Nindv);
  	}
 	
-	int sum=0;
-	int sum2 = 0;
-	columnsum.resize (Nsnp);    
-	columnsum2.resize (Nsnp);    
+//	int sum=0;
+//	int sum2 = 0;
+	vector<int> sum(pheno_num); 
+	vector<int> sum2(pheno_num);
+	for(int phenoi=0; phenoi<pheno_num; phenoi++)
+	{
+		sum[phenoi]=0; sum2[phenoi]=0; 
+	} 
+//	msb.resize(Nsnp,std::vector<bool>(Nindv));
+	columnsum.resize(pheno_num, std::vector<int>(Nsnp)); 
+//	columnsum.resize (Nsnp);    
+	columnsum2.resize (pheno_num, std::vector<int>(Nsnp));    
 
 	// Note that the coding of 0 and 2 can get flipped relative to plink because plink uses allele frequency (minor)
 	// allele to code a SNP as 0 or 1.
@@ -311,6 +321,7 @@ void genotype::read_bed_mailman (string filename ,bool allow_missing)  {
 		int horiz_seg_no = i/segment_size_hori ;
 	   	ifs.read (reinterpret_cast<char*>(gtype), ncol*sizeof(unsigned char));   
     		float p_j = get_observed_pj(gtype); 
+		int n=0; 
 		for (int k = 0 ;k < ncol ; k++) {
         		unsigned char c = gtype [k];
 			// Extract PLINK genotypes
@@ -350,23 +361,32 @@ void genotype::read_bed_mailman (string filename ,bool allow_missing)  {
 				}
 				val-- ; 
 				val =  (val < 0 ) ? 0 :val ;
-				sum += val;
-				sum2 += val*val;
+				for(int phenoi=0; phenoi<pheno_num; phenoi++)
+				{
+					sum[phenoi] += val*pheno_mask(n,phenoi);
+					sum2[phenoi] += val*val*pheno_mask(n,phenoi);
+				}
 				p[horiz_seg_no][j] = 3 * p[horiz_seg_no][j]  + val;
+				n++; 
 			}
 
     	}
-		columnsum[i] = sum;
-		columnsum2[i] = sum2;
-		sum = 0 ; sum2 = 0 ;
+		for(int phenoi=0; phenoi<pheno_num; phenoi++){
+		columnsum[phenoi][i] = sum[phenoi];
+		columnsum2[phenoi][i] = sum2[phenoi];
+		sum[phenoi]=0; sum2[phenoi]=0; 
+		}
+		
+		n=0; 
 	}
-	init_means(false);	
+	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>  exist_ind = pheno_mask.colwise().sum(); 
+	init_means(false, pheno_num,exist_ind);	
 
 	delete[] gtype;
 }
 
 
-void genotype::read_bed_naive (string filename, bool allow_missing)  {
+void genotype::read_bed_naive (string filename, bool allow_missing, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &pheno_mask, int pheno_num)  {
 
 	ifstream ifs (filename.c_str(), ios::in|ios::binary);                                       
    	char magic[3];
@@ -381,10 +401,14 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
 		not_O_i.resize(Nsnp);
 		not_O_j.resize(Nindv);	
 	}
-	
-	int sum=0;int sum2=0; 
-	columnsum.resize (Nsnp);    
-	columnsum2.resize(Nsnp); 
+	vector<int> sum(pheno_num); 
+	vector<int> sum2(pheno_num); 
+	for(int phenoi=0; phenoi<pheno_num; phenoi++)
+	{
+		sum[phenoi]=0; sum2[phenoi]=0; 
+	}	
+	columnsum.resize (pheno_num, std::vector<int>(Nsnp));    
+	columnsum2.resize(pheno_num, std::vector<int>(Nsnp)); 
 	// Note that the coding of 0 and 2 can get flipped relative to plink because plink uses allele frequency (minor)
 	// allele to code a SNP as 0 or 1.
 	// This flipping does not matter for results.
@@ -393,6 +417,7 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
 	for (int i = 0 ; i < Nsnp; i++){
 	   	ifs.read (reinterpret_cast<char*>(gtype), ncol*sizeof(unsigned char));   
 		float p_j =get_observed_pj(gtype); 
+		int n=0; 
     	for (int k = 0 ;k < ncol ; k++) {
         	unsigned char c = gtype [k];
 			// Extract PLINK genotypes
@@ -431,7 +456,12 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
 				}
 				val-- ; 
 				val =  (val < 0 ) ? 0 :val ;
-				sum += val;sum2 += val*val; 
+				for(int phenoi=0; phenoi<pheno_num; phenoi++)
+				{
+					sum[phenoi] += val*pheno_mask(n, phenoi); 
+					sum2[phenoi] += val*val*pheno_mask(n,phenoi); 
+				}
+				n++; 
 				if(val==0){
 					lsb[i][j] = false;
 					msb[i][j]= false;
@@ -450,87 +480,95 @@ void genotype::read_bed_naive (string filename, bool allow_missing)  {
 				}
 			}
     	}
-		columnsum[i] = sum;
-		columnsum2[i] = sum2;
-		sum = 0 ;sum2=0; 
+	//	columnsum[i] = sum;
+	//	columnsum2[i] = sum2;
+		for(int phenoi=0; phenoi<pheno_num; phenoi++)
+		{
+			columnsum[phenoi][i] =sum[phenoi]; 
+			columnsum2[phenoi][i]=sum2[phenoi];
+			sum[phenoi]=0; sum2[phenoi]=0; 
+		}
+		n=0; 
 	}
-	init_means(allow_missing);	
+//	init_means(allow_missing);	
+	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> exist_ind = pheno_mask.colwise().sum(); 
+	init_means(false, pheno_num, exist_ind); 
 
 	delete[] gtype;
 }
 
 
-void genotype::read_bed (string filename, bool allow_missing, bool mailman_mode )  {
+void genotype::read_bed (string filename, bool allow_missing, bool mailman_mode ,Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &pheno_mask, int pheno_num)  {
 	if(mailman_mode){
-		read_bed_mailman(filename, allow_missing); 
+		read_bed_mailman(filename, allow_missing, pheno_mask, pheno_num); 
 	}
 	else{
-		read_bed_naive(filename,allow_missing);
+		read_bed_naive(filename,allow_missing,pheno_mask, pheno_num);
 	}
 }
 
-void genotype::read_plink(std::string filenameprefix, bool allow_missing,bool mailman_mode)  { 
+void genotype::read_plink(std::string filenameprefix, bool allow_missing,bool mailman_mode,Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &pheno_mask, int pheno_num)  { 
 	
 	std::stringstream f1;  
 	f1 << filenameprefix << ".bim";
 	read_bim (f1.str());
-	std::stringstream f2;  
-	f2 << filenameprefix << ".fam";
-	read_fam (f2.str());
+//	std::stringstream f2;  
+//	f2 << filenameprefix << ".fam";
+//	read_fam (f2.str());
 	std::stringstream f3;  
 	f3 << filenameprefix << ".bed";
-	read_bed (f3.str(), allow_missing,mailman_mode);
+	read_bed (f3.str(), allow_missing,mailman_mode, pheno_mask, pheno_num);
 }
 
 
 // Accessor Functions
 
-double genotype::get_geno(int snpindex,int indvindex,bool var_normalize=false){
+double genotype::get_geno(int snpindex,int indvindex,bool var_normalize=false, int phenoindex=0, int exist_ind=1){
 	double m = msb[snpindex][indvindex];
 	double l = lsb[snpindex][indvindex];
-	double geno = (m*2.0+l) - get_col_mean(snpindex);
+	double geno = (m*2.0+l) - get_col_mean(snpindex, phenoindex);
 	if(var_normalize)
-		return geno/get_col_std(snpindex);
+		return geno/get_col_std(snpindex,phenoindex, exist_ind);
 	else
 		return geno;
 }
 
-double genotype::get_col_mean(int snpindex){
-	double temp = columnmeans[snpindex];
+double genotype::get_col_mean(int snpindex, int  phenoindex){
+	double temp = columnmeans[phenoindex][snpindex];
 	return temp;
 }
 
-double genotype::get_col_sum(int snpindex){
-	double temp = columnsum[snpindex];
+double genotype::get_col_sum(int snpindex, int phenoindex){
+	double temp = columnsum[phenoindex][snpindex];
 	return temp;
 }
 
 
-double genotype::get_col_sum2(int snpindex){
-	double temp=columnsum2[snpindex]; 
+double genotype::get_col_sum2(int snpindex, int phenoindex){
+	double temp=columnsum2[phenoindex][snpindex]; 
 	return temp; 
 }
-double genotype::get_col_std(int snpindex){
-	double p_i = get_col_mean(snpindex);
+double genotype::get_col_std(int snpindex,int phenoindex, int exist_ind){
+	double p_i = get_col_mean(snpindex,phenoindex);
 //	double temp = sqrt(p_i*(1-(0.5*p_i))) ; 
-	double col_sum2 = get_col_sum2(snpindex); 
-	double col_sum = get_col_sum(snpindex); 
-	double temp = sqrt((col_sum2 + Nindv*p_i*p_i - 2*col_sum*p_i)/(Nindv-1)); 
+	double col_sum2 = get_col_sum2(snpindex, phenoindex); 
+	double col_sum = get_col_sum(snpindex, phenoindex); 
+	double temp = sqrt((col_sum2 + exist_ind*p_i*p_i - 2*col_sum*p_i)/(exist_ind-1)); 
 	return temp;
 }
 
 int genotype::get_chrom_snp(int chromindex){
 	return chromSNP[chromindex];  
 }
-void genotype::generate_eigen_geno(Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &geno_matrix,bool var_normalize){
+void genotype::generate_eigen_geno(Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &geno_matrix,bool var_normalize,int phenoindex){
 	for(int i=0;i<Nsnp;i++){
 		for(int j=0;j<Nindv;j++){
 			double m = msb[i][j];
 			double l = lsb[i][j];
 			double geno = (m*2.0+l);
 			if(var_normalize){
-				geno =geno - get_col_mean(i); 
-				geno_matrix(i,j) = geno/get_col_std(i);
+				geno =geno - get_col_mean(i, phenoindex); 
+				geno_matrix(i,j) = geno/get_col_std(i, phenoindex,Nindv);
 			}
 			else
 				geno_matrix(i,j) = geno;
@@ -540,8 +578,8 @@ void genotype::generate_eigen_geno(Eigen::Matrix<double, Eigen::Dynamic, Eigen::
 
 // Modifier Functions
 
-void genotype::update_col_mean(int snpindex,double value){
-	columnmeans[snpindex] = value;
+void genotype::update_col_mean(int snpindex,double value, int phenoindex){
+	columnmeans[phenoindex][snpindex] = value;
 }
 
 

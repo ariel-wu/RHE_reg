@@ -16,6 +16,7 @@ struct options{
 	std::string PHENOTYPE_FILE_PATH; 
 	std::string COVARIATE_FILE_PATH; 
 	std::string COVARIATE_NAME; 
+	std::string PAIR_PATH; 
 	std::string OUTPUT_PATH;
 	int pheno_idx; 
 	int batchNum; 
@@ -31,6 +32,7 @@ struct options{
 	bool reg; 
 	bool gwas; 
 	bool bpheno; 
+	bool pheno_fill; 
 	float tr2; 	
 };
 
@@ -198,6 +200,7 @@ void parse_args(int argc, char const *argv[]){
 	command_line_opts.getaccuracy=false;
 	command_line_opts.debugmode=false;
 	command_line_opts.OUTPUT_PATH = "";
+	command_line_opts.PAIR_PATH=""; 
 	bool got_genotype_file=false;
 	command_line_opts.l=2;
 	command_line_opts.accelerated_em=0;
@@ -210,6 +213,7 @@ void parse_args(int argc, char const *argv[]){
 	command_line_opts.tr2=-1; 
 	command_line_opts.pheno_idx=0; 
 	command_line_opts.bpheno=false; 
+	command_line_opts.pheno_fill=false; 
 	if(argc<3){
 		cout<<"Correct Usage is "<<argv[0]<<" -g <genotype file> -p <phenotype file> -c <covaraite file> -b <zb/10> "<<endl;
 		exit(-1);
@@ -256,6 +260,10 @@ void parse_args(int argc, char const *argv[]){
                                 command_line_opts.COVARIATE_NAME = string(argv[i+1]);
                                 i++;
                         }
+			else if(strcmp(argv[i], "-gc")==0){
+				command_line_opts.PAIR_PATH=string(argv[i+1]); 
+				i++; 
+			}
 			else if(strcmp(argv[i],"-o")==0){
 				command_line_opts.OUTPUT_PATH = string(argv[i+1]);
 				i++;
@@ -278,6 +286,10 @@ void parse_args(int argc, char const *argv[]){
 			}
 			else if(strcmp(argv[i], "-binary")==0){
 				command_line_opts.bpheno=true; 
+				i++; 
+			}
+			else if (strcmp(argv[i], "-fill")==0){
+				command_line_opts.pheno_fill=true; 
 				i++; 
 			}
 			else if(strcmp(argv[i],"-aem")==0){
