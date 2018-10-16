@@ -50,7 +50,7 @@ The values in the brackets are the command line flags for running the code witho
 * covariate name (-cn) : The name of the covariate to use in the covariate file. If not specified, RHE_reg will use all the covarites in the covariate file. 
 * batch number (-b) : Number of random vectors used in the estimator % 10. 
 * phenotype number (-mpheno) : The number of phenotype to use in the phenotype file. If not specified, RHE_reg will compute heritability estimates on all the phenotypes. 
-
+* fill in missing phenotype with mean (-fill) : Fill in missing phenotypes with mean. Otherwise will be ignored. 
 ```
 
 
