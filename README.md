@@ -53,15 +53,23 @@ The values in the brackets are the command line flags for running the code witho
 * phenotype number (-mpheno) : The number of phenotype to use in the phenotype file. 
   If not specified, RHE_reg will compute heritability estimates on all the phenotypes. 
 * fill in missing phenotype with mean (-fill) : Fill in missing phenotypes with mean. 
+* Computing genetic correlation only (noh2g): If pass in multiple phenotypes, the program will compute genetic correlation factors (rg). If the phenotypes share samples, one may compute genetic correlation without computing heritabitliy. This option must be combined with (-fill) if there is missingess in phenotypes.  
   Otherwise will be ignored. 
 ```
 
 
 An example parameter file is provided in the example directory. 
 You can run the code using the command: 
-
+To compute heritability and genetic correlation: 
 ```
 ../build/RHE_reg -g 200_100 -p 200_100.pheno.plink -c 200_100.cov -b 10 
 ```
-
+To compute heritability and genetic correlation for shared-sample phenotypes: 
+```
+../build/RHE_reg -g 200_100 -p 200_100.pheno.pheno2 -fill -b 10
+```
+To compute genetics correlation only for shared-sample phenotypes: 
+```
+../build/RHE_reg -g 200_100 -p 200_100.pheno_pheno2 -fill -noh2g -b 10 
+```
 

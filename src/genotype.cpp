@@ -310,18 +310,30 @@ void genotype::read_bed_mailman (string filename ,bool allow_missing, Eigen::Mat
 //	msb.resize(Nsnp,std::vector<bool>(Nindv));
 	columnsum.resize(pheno_num, std::vector<int>(Nsnp)); 
 //	columnsum.resize (Nsnp);    
-	columnsum2.resize (pheno_num, std::vector<int>(Nsnp));    
-
+	columnsum2.resize (pheno_num, std::vector<int>(Nsnp));
+	    
+	rowsum.resize(Nindv, std::vector<double>(23)); 
+	for(int ind =0; ind<Nindv; ind++)
+		for(int chrom =0; chrom<=22; chrom++)
+			rowsum[ind][chrom]=0;
 	// Note that the coding of 0 and 2 can get flipped relative to plink because plink uses allele frequency (minor)
 	// allele to code a SNP as 0 or 1.
 	// This flipping does not matter for results.
 	vector<int> v (Nindv);
 	int y[4];
-	for (int i = 0 ; i < Nsnp; i++){
-		int horiz_seg_no = i/segment_size_hori ;
+	int snp_idx=0;
+	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>  exist_ind = pheno_mask.colwise().sum(); 
+	for (int chrom_i =0; chrom_i <=22; chrom_i++)
+	{
+		int block_snp_num = chromSNP[chrom_i]; 
+	//for (int i = 0 ; i < Nsnp; i++){
+		for(int i=0; i<block_snp_num; i++){
+		int horiz_seg_no = snp_idx/segment_size_hori ;
 	   	ifs.read (reinterpret_cast<char*>(gtype), ncol*sizeof(unsigned char));   
     		float p_j = get_observed_pj(gtype); 
-		int n=0; 
+		int n=0;
+		double snp_mean=0;
+		double curSNP[Nindv];   
 		for (int k = 0 ;k < ncol ; k++) {
         		unsigned char c = gtype [k];
 			// Extract PLINK genotypes
@@ -336,19 +348,8 @@ void genotype::read_bed_mailman (string filename ,bool allow_missing, Eigen::Mat
 				lmax = Nindv%4;
 				lmax = (lmax==0)?4:lmax;
 			}	
-			// Note  : Plink uses different values for coding genotypes
-			// Note  : Does not work for missing values
-			// To handle missing data it is recommended to write a separate function. This is easy to do.
-			// This will avoid the performance hit of checking for and handling missing values
 			for ( int l = 0 ; l < lmax; l++){
 				int j = j0 + l ;
-//				int ver_seg_no = j/segment_size_ver ;
-				// Extract  PLINK coded genotype and convert into 0/1/2
-				// PLINK coding: 
-				// 00->0
-				// 01->missing
-				// 10->1
-				// 11->2
 				int val = y[l];
 				if(val==1 && !allow_missing){
 					val = simulate_geno_from_random(p_j);
@@ -361,27 +362,38 @@ void genotype::read_bed_mailman (string filename ,bool allow_missing, Eigen::Mat
 				}
 				val-- ; 
 				val =  (val < 0 ) ? 0 :val ;
+				snp_mean += val; 
 				for(int phenoi=0; phenoi<pheno_num; phenoi++)
 				{
 					sum[phenoi] += val*pheno_mask(n,phenoi);
 					sum2[phenoi] += val*val*pheno_mask(n,phenoi);
 				}
 				p[horiz_seg_no][j] = 3 * p[horiz_seg_no][j]  + val;
+				curSNP[n] = val; 
 				n++; 
 			}
 
-    	}
-		for(int phenoi=0; phenoi<pheno_num; phenoi++){
-		columnsum[phenoi][i] = sum[phenoi];
-		columnsum2[phenoi][i] = sum2[phenoi];
-		sum[phenoi]=0; sum2[phenoi]=0; 
-		}
+    		}
+			snp_mean = snp_mean/ Nindv;
+	  
+			for(int t=0; t < Nindv; t++)
+			{
+				double temp = curSNP[t];
+				double q  = snp_mean/2; 
+				rowsum[t][chrom_i] += (temp-snp_mean) *(temp-snp_mean) / 2/q/(1-q);
+			}	
+			for(int phenoi=0; phenoi<pheno_num; phenoi++){
+			columnsum[phenoi][snp_idx] = sum[phenoi];
+			columnsum2[phenoi][snp_idx] = sum2[phenoi];
+			sum[phenoi]=0; sum2[phenoi]=0; 
+			}
+			
 		
-		n=0; 
+		n=0;
+		snp_idx++; 
+		} 
 	}
-	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>  exist_ind = pheno_mask.colwise().sum(); 
 	init_means(false, pheno_num,exist_ind);	
-
 	delete[] gtype;
 }
 
@@ -547,6 +559,10 @@ double genotype::get_col_sum(int snpindex, int phenoindex){
 double genotype::get_col_sum2(int snpindex, int phenoindex){
 	double temp=columnsum2[phenoindex][snpindex]; 
 	return temp; 
+}
+double genotype::get_row_sum(int indindex, int chromindex){
+	double temp = rowsum[indindex][chromindex]; 
+	return temp; 	
 }
 double genotype::get_col_std(int snpindex,int phenoindex, int exist_ind){
 	double p_i = get_col_mean(snpindex,phenoindex);
