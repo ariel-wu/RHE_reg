@@ -11,6 +11,18 @@ please cite our paper:
 
 Wu Y.,Sankararaman S. (2018) A scalable estimator of SNP heritability for Biobank-scale Data
 
+# RG_cor
+Randomized genetic correlation estimator 
+
+
+We propose a scalable randomized Method-of-Moments (MoM) estimator of genetic correlations in bi-variate LMMs. The method compute genetic correlation in two senerios: the samples of phenotypes are shared and partially shared. 
+
+### Citing RG_cor
+
+If you find that this software is useful for your research project, 
+please cite our paper: 
+
+Wu, Y., Yaschenko, A., Heydary, M. H., & Sankararaman, S. (2019). Fast estimation of genetic correlation for Biobank-scale data. bioRxiv, 525055. 
 ## Getting Started
 
 ### Prerequisites
